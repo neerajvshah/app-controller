@@ -18,13 +18,16 @@ package controller
 
 import (
 	"context"
+	"fmt"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	appv1 "neeraj.angi/app-operator/api/v1"
+	v1 "neeraj.angi/app-operator/api/v1"
+	"neeraj.angi/app-operator/util/kubeclient"
 )
 
 // PodInfoRedisApplicationReconciler reconciles a PodInfoRedisApplication object
@@ -47,9 +50,15 @@ type PodInfoRedisApplicationReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.17.0/pkg/reconcile
 func (r *PodInfoRedisApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
-
-	// TODO(user): your logic here
+	app := &v1.PodInfoRedisApplication{}
+	if err := r.Client.Get(ctx, req.NamespacedName, app); err != nil {
+		return reconcile.Result{}, client.IgnoreNotFound(err)
+	}
+	for _, obj := range []client.Object{app.AppDeployment(), app.Service()} {
+		if err := kubeclient.Apply(ctx, r.Client, obj); err != nil {
+			return reconcile.Result{}, fmt.Errorf("failed to apply app deployment: %v", err)
+		}
+	}
 
 	return ctrl.Result{}, nil
 }

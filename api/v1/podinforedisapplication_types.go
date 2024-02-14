@@ -17,6 +17,12 @@ limitations under the License.
 package v1
 
 import (
+	"fmt"
+	"reflect"
+
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -30,6 +36,32 @@ type PodInfoRedisApplicationSpec struct {
 
 	// Foo is an example field of PodInfoRedisApplication. Edit podinforedisapplication_types.go to remove/update
 	Foo string `json:"foo,omitempty"`
+
+	// TODO evaluate use of omitempty
+	ReplicaCount *int32 `json:"replicaCount,omitempty"`
+	Resources    `json:"resources,omitempty"`
+	Image        `json:"image,omitempty"`
+	UI           `json:"ui,omitempty"`
+	Redis        `json:"redis,omitempty"`
+}
+
+type Resources struct {
+	MemoryLimit resource.Quantity `json:"memoryLimit,omitempty"`
+	CpuRequest  resource.Quantity `json:"cpuRequest,omitempty"`
+}
+
+type Image struct {
+	Repository string `json:"repository,omitempty"`
+	Tag        string `json:"tag,omitempty"`
+}
+
+type UI struct {
+	Color   string `json:"color,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
+type Redis struct {
+	Enabled bool `json:"enabled,omitempty"`
 }
 
 // PodInfoRedisApplicationStatus defines the observed state of PodInfoRedisApplication
@@ -61,4 +93,78 @@ type PodInfoRedisApplicationList struct {
 
 func init() {
 	SchemeBuilder.Register(&PodInfoRedisApplication{}, &PodInfoRedisApplicationList{})
+}
+
+func (app *PodInfoRedisApplication) AppDeployment() *appsv1.Deployment {
+	return &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: app.Namespace,
+			Name:      app.Name,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: app.Spec.ReplicaCount,
+			Selector: &metav1.LabelSelector{MatchLabels: app.labels()},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: app.labels()},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							// TODO configure: liveness/readiness probes, Deployment strategy, PDBs, minready, etc
+							Name:  "podinfo",
+							Image: fmt.Sprintf("%v:%v", app.Spec.Image.Repository, app.Spec.Image.Tag),
+							Resources: corev1.ResourceRequirements{
+								Limits: corev1.ResourceList{
+									corev1.ResourceMemory: app.Spec.MemoryLimit,
+								},
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU: app.Spec.Resources.CpuRequest,
+								},
+							},
+							Command: []string{"./podinfo", "--port=9898"}, // hardcoding port for now. generate ports dynamically to avoid overlap?
+							Env: []corev1.EnvVar{
+								{
+									Name:  "PODINFO_UI_COLOR",
+									Value: app.Spec.UI.Color,
+								},
+								{
+									Name:  "PODINFO_UI_MESSAGE",
+									Value: app.Spec.UI.Message,
+								},
+							},
+							Ports: []corev1.ContainerPort{
+								{
+									Name:          "http",
+									ContainerPort: 9898,
+									Protocol:      corev1.ProtocolTCP,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func (app *PodInfoRedisApplication) Service() *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{Namespace: app.Namespace, Name: app.Name},
+		Spec: corev1.ServiceSpec{
+			Type:     corev1.ServiceTypeNodePort,
+			Selector: app.labels(),
+			Ports: []corev1.ServicePort{
+				{
+					Name:     "http",
+					Port:     9898,
+					Protocol: corev1.ProtocolTCP,
+				},
+			},
+		},
+	}
+}
+
+func (app *PodInfoRedisApplication) labels() map[string]string {
+	return map[string]string{
+		fmt.Sprintf("%v/%v", GroupVersion.Group, reflect.TypeOf(app).Elem().Name()): string(app.UID),
+	}
 }
