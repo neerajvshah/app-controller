@@ -7,7 +7,7 @@ rules:
 - apiGroups:
   - app.neeraj.angi
   resources:
-  - podinforedisapplications
+  - podinforedisapplication
   verbs:
   - create
   - delete
@@ -19,13 +19,13 @@ rules:
 - apiGroups:
   - app.neeraj.angi
   resources:
-  - podinforedisapplications/finalizers
+  - podinforedisapplication/finalizers
   verbs:
   - update
 - apiGroups:
   - app.neeraj.angi
   resources:
-  - podinforedisapplications/status
+  - podinforedisapplication/status
   verbs:
   - get
   - patch

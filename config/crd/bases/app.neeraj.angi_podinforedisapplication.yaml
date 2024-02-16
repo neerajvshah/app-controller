@@ -1,0 +1,100 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.14.0
+  name: podinforedisapplication.app.neeraj.angi
+spec:
+  group: app.neeraj.angi
+  names:
+    kind: PodInfoRedisApplication
+    listKind: PodInfoRedisApplicationList
+    plural: podinforedisapplication
+    shortNames:
+    - pira
+    singular: podinforedisapplication
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: PodInfoRedisApplication is the Schema for the podinforedisapplication
+          API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: PodInfoRedisApplicationSpec defines the desired state of
+              PodInfoRedisApplication
+            properties:
+              image:
+                properties:
+                  repository:
+                    description: Repository of the PodInfo conatiner image.
+                    type: string
+                  tag:
+                    description: Tag of the PodInfo container image.
+                    type: string
+                type: object
+              redis:
+                properties:
+                  enabled:
+                    description: Enables a Redis datastore for PodInfo containers.
+                    type: boolean
+                type: object
+              replicaCount:
+                default: 2
+                description: Replica count of PodInfo.
+                format: int32
+                minimum: 1
+                type: integer
+              resources:
+                properties:
+                  cpuRequest:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
+                  memoryLimit:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
+                type: object
+              ui:
+                properties:
+                  color:
+                    description: Hexadecimal color string of the PodInfo UI.
+                    type: string
+                  message:
+                    description: PodInfo message to display.
+                    type: string
+                type: object
+            type: object
+          status:
+            description: PodInfoRedisApplicationStatus defines the observed state
+              of PodInfoRedisApplication
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

@@ -24,20 +24,16 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
-
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // PodInfoRedisApplicationSpec defines the desired state of PodInfoRedisApplication
 type PodInfoRedisApplicationSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of PodInfoRedisApplication. Edit podinforedisapplication_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
-
-	// TODO evaluate use of omitempty
+	// Replica count of PodInfo.
+	// +kubebuilder:default:=2
+	// +kubebuilder:validation:Minimum:=1
+	// +optional
 	ReplicaCount *int32 `json:"replicaCount,omitempty"`
 	Resources    `json:"resources,omitempty"`
 	Image        `json:"image,omitempty"`
@@ -51,29 +47,33 @@ type Resources struct {
 }
 
 type Image struct {
+	// Repository of the PodInfo conatiner image.
 	Repository string `json:"repository,omitempty"`
-	Tag        string `json:"tag,omitempty"`
+	// Tag of the PodInfo container image.
+	Tag string `json:"tag,omitempty"`
 }
 
 type UI struct {
-	Color   string `json:"color,omitempty"`
+	// Hexadecimal color string of the PodInfo UI.
+	Color string `json:"color,omitempty"`
+	// PodInfo message to display.
 	Message string `json:"message,omitempty"`
 }
 
 type Redis struct {
+	// Enables a Redis datastore for PodInfo containers.
 	Enabled bool `json:"enabled,omitempty"`
 }
 
 // PodInfoRedisApplicationStatus defines the observed state of PodInfoRedisApplication
 type PodInfoRedisApplicationStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// TODO add Conditions
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
-
-// PodInfoRedisApplication is the Schema for the podinforedisapplications API
+// PodInfoRedisApplication is the Schema for the podinforedisapplication API
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:path=podinforedisapplication,shortName={pira}
 type PodInfoRedisApplication struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -95,45 +95,117 @@ func init() {
 	SchemeBuilder.Register(&PodInfoRedisApplication{}, &PodInfoRedisApplicationList{})
 }
 
-func (app *PodInfoRedisApplication) AppDeployment() *appsv1.Deployment {
+func (pira *PodInfoRedisApplication) RedisDeployment() *appsv1.Deployment {
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: app.Namespace,
-			Name:      app.Name,
+			Namespace: pira.Namespace,
+			Name:      fmt.Sprintf("%v-%v", pira.Name, "redis"),
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: app.Spec.ReplicaCount,
-			Selector: &metav1.LabelSelector{MatchLabels: app.labels()},
+			Selector: &metav1.LabelSelector{MatchLabels: pira.labels("redis")},
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: app.labels()},
+				ObjectMeta: metav1.ObjectMeta{Labels: pira.labels("redis")},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:    "redis",
+							Image:   "public.ecr.aws/docker/library/redis:latest",
+							Command: []string{"redis-server"},
+							Ports: []corev1.ContainerPort{
+								{
+									Name:          "redis",
+									ContainerPort: 6379,
+									Protocol:      corev1.ProtocolTCP,
+								},
+							},
+							LivenessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									TCPSocket: &corev1.TCPSocketAction{
+										Port: intstr.FromString("redis"),
+									},
+								},
+								InitialDelaySeconds: 5,
+								TimeoutSeconds:      5,
+							},
+							ReadinessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									Exec: &corev1.ExecAction{
+										Command: []string{"redis-cli", "ping"},
+									},
+								},
+								InitialDelaySeconds: 5,
+								TimeoutSeconds:      5,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func (pira *PodInfoRedisApplication) RedisService() *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: pira.Namespace,
+			Name:      fmt.Sprintf("%v-%v", pira.Name, "redis"),
+		},
+		Spec: corev1.ServiceSpec{
+			Type:     corev1.ServiceTypeClusterIP,
+			Selector: pira.labels("redis"),
+			Ports: []corev1.ServicePort{{
+				Name:       "redis",
+				Port:       6379,
+				Protocol:   corev1.ProtocolTCP,
+				TargetPort: intstr.FromString("redis"),
+			}},
+		},
+	}
+}
+
+func (pira *PodInfoRedisApplication) PodInfoDeployment() *appsv1.Deployment {
+	return &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: pira.Namespace,
+			Name:      fmt.Sprintf("%v-%v", pira.Name, "podinfo"),
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: pira.Spec.ReplicaCount,
+			Selector: &metav1.LabelSelector{MatchLabels: pira.labels("podinfo")},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: pira.labels("podinfo")},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
 							// TODO configure: liveness/readiness probes, Deployment strategy, PDBs, minready, etc
 							Name:  "podinfo",
-							Image: fmt.Sprintf("%v:%v", app.Spec.Image.Repository, app.Spec.Image.Tag),
+							Image: fmt.Sprintf("%v:%v", pira.Spec.Image.Repository, pira.Spec.Image.Tag),
 							Resources: corev1.ResourceRequirements{
 								Limits: corev1.ResourceList{
-									corev1.ResourceMemory: app.Spec.MemoryLimit,
+									corev1.ResourceMemory: pira.Spec.MemoryLimit,
 								},
 								Requests: corev1.ResourceList{
-									corev1.ResourceCPU: app.Spec.Resources.CpuRequest,
+									corev1.ResourceCPU: pira.Spec.Resources.CpuRequest,
 								},
 							},
 							Command: []string{"./podinfo", "--port=9898"}, // hardcoding port for now. generate ports dynamically to avoid overlap?
 							Env: []corev1.EnvVar{
 								{
 									Name:  "PODINFO_UI_COLOR",
-									Value: app.Spec.UI.Color,
+									Value: pira.Spec.UI.Color,
 								},
 								{
 									Name:  "PODINFO_UI_MESSAGE",
-									Value: app.Spec.UI.Message,
+									Value: pira.Spec.UI.Message,
+								},
+								{
+									Name:  "PODINFO_CACHE_SERVER",
+									Value: fmt.Sprintf("tcp://%v-redis:6379", pira.Name),
 								},
 							},
 							Ports: []corev1.ContainerPort{
 								{
-									Name:          "http",
+									Name:          "podinfo",
 									ContainerPort: 9898,
 									Protocol:      corev1.ProtocolTCP,
 								},
@@ -146,15 +218,18 @@ func (app *PodInfoRedisApplication) AppDeployment() *appsv1.Deployment {
 	}
 }
 
-func (app *PodInfoRedisApplication) Service() *corev1.Service {
+func (pira *PodInfoRedisApplication) PodInfoService() *corev1.Service {
 	return &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{Namespace: app.Namespace, Name: app.Name},
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: pira.Namespace,
+			Name:      fmt.Sprintf("%v-%v", pira.Name, "podinfo"),
+		},
 		Spec: corev1.ServiceSpec{
 			Type:     corev1.ServiceTypeNodePort,
-			Selector: app.labels(),
+			Selector: pira.labels("podinfo"),
 			Ports: []corev1.ServicePort{
 				{
-					Name:     "http",
+					Name:     "podinfo",
 					Port:     9898,
 					Protocol: corev1.ProtocolTCP,
 				},
@@ -163,8 +238,9 @@ func (app *PodInfoRedisApplication) Service() *corev1.Service {
 	}
 }
 
-func (app *PodInfoRedisApplication) labels() map[string]string {
+func (pira *PodInfoRedisApplication) labels(application string) map[string]string {
 	return map[string]string{
-		fmt.Sprintf("%v/%v", GroupVersion.Group, reflect.TypeOf(app).Elem().Name()): string(app.UID),
+		fmt.Sprintf("%v/%v", GroupVersion.Group, reflect.TypeOf(pira).Elem().Name()): string(pira.UID),
+		fmt.Sprintf("%v/Application", GroupVersion.Group):                            application,
 	}
 }
