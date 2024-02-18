@@ -1,0 +1,17 @@
+apiVersion: app.neeraj.angi/v1
+kind: PodInfoRedisApplication
+metadata:
+  name: whatever
+spec:
+  replicaCount: 2
+  resources:
+    memoryLimit: 64Mi
+    cpuRequest: 100m
+  image:
+    repository: ghcr.io/stefanprodan/podinfo
+    tag: latest
+  ui:
+    color: "#34577c"
+    message: "some string"
+  redis:
+    enabled: true
