@@ -11,12 +11,13 @@ From there you can create a PodInfoRedisApplication (shortName `pira`) using:
 ```
 kubectl apply -f ./hack/test-pira.yaml
 ```
+You should see your deployments and services come up.
 
 A PodInfo service will be exposed through a NodePort - to tunnel this through to your computer's network, you can use:
 ```
 minikube service whatever-podinfo --url
 ```
-You can then navigate to that URL.
+You can then navigate to that URL in your browser.
 
 The above command will output the localhost URL the service is exposed on. If Redis is enabled, you can also send POST/PUT and GET requests to that same URL against `/cache/{key}` and verify connectivity between PodInfo and Redis. In the below example, I am using URL `http://127.0.0.1:56937`.
 ```
@@ -25,7 +26,7 @@ curl -H 'Content-Type: application/json' -d "hello world" -X POST $URL/cache/tes
 curl $URL/cache/test
 ```
 
-You should see your deployments and services come up. You can edit the CR and see changes flow through with:
+You can edit the CR and see changes flow through with (give the deployment a few seconds to roll out after change):
 ```
 kubectl edit pira whatever
 ```
