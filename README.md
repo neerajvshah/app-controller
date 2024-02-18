@@ -35,6 +35,12 @@ You can delete the CR and see that all owned resources (deployments, services) w
 kubeclt delete pira whatever
 ```
 
+## Testing
+Unit tests can be run with the following command:
+```
+make test
+```
+
 ## License
 
 Copyright 2024.

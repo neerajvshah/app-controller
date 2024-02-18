@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -167,13 +168,10 @@ var _ = Describe("PodInfoRedisApplication Controller", func() {
 
 			By("Cleanup the specific resource instance PodInfoRedisApplication")
 			Expect(k8sClient.Delete(ctx, pira)).To(Succeed())
-			// Verify cascading delete
 			Expect(k8sClient.Delete(ctx, &podInfoDeployment)).To(Succeed())
 			Expect(k8sClient.Delete(ctx, &podInfoService)).To(Succeed())
-			if pira.Spec.Redis.Enabled {
-				Expect(k8sClient.Delete(ctx, &redisDeployment)).To(Succeed())
-				Expect(k8sClient.Delete(ctx, &redisService)).To(Succeed())
-			}
+			Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, &redisDeployment))).To(Succeed())
+			Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, &redisService))).To(Succeed())
 		})
 	})
 })
